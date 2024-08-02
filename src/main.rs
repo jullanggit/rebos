@@ -1,27 +1,27 @@
 // Source files to include.
-mod library; // Full of functions.
-mod convert; // Convert one type to another type.
-mod places; // Where is stuff stored?
 mod cli; // For argument parsing and command structuring.
-mod generation; // The generations system.
 mod config; // Configuration stuff.
+mod convert; // Convert one type to another type.
+mod generation; // The generations system.
+mod hook; // Hook stuff.
+mod library; // Full of functions.
+mod lock; // Locking file functionality.
+mod management; // Stuff related to item management.
 mod obj_print; // Print objects.
 mod obj_print_boilerplate; // Boilerplate code for obj print.
-mod management; // Stuff related to item management.
-mod system; // Used for getting system information.
-mod hook; // Hook stuff.
-mod lock; // Locking file functionality.
-mod proc; // Process management stuff for Rebos.
+mod places; // Where is stuff stored?
+mod proc;
+mod system; // Used for getting system information. // Process management stuff for Rebos.
 
 // Import stuff from source files and crates.
 use clap::Parser;
-use std::io::{ self, Write };
-use library::*;
-use config::ConfigSide;
 use colored::Colorize;
+use config::ConfigSide;
+use fspp::*;
+use library::*;
 use piglog::prelude::*;
 use piglog::*;
-use fspp::*;
+use std::io::{self, Write};
 
 // The exit code for the program.
 #[derive(PartialEq)]
@@ -31,8 +31,7 @@ enum ExitCode {
 }
 
 // Use this function for testing code!
-fn test_code() {
-}
+fn test_code() {}
 
 // Cleanup when Rebos fails.
 fn error_cleanup() {
@@ -54,7 +53,7 @@ fn main() -> std::process::ExitCode {
             error_cleanup();
 
             std::process::ExitCode::FAILURE
-        },
+        }
     }
 }
 
@@ -69,36 +68,47 @@ fn app() -> ExitCode {
         true => {
             error!("Cannot run as root! Please run as the normal user!");
             return ExitCode::Fail;
-        },
+        }
 
-        false => {},
+        false => {}
     };
 
     // Migration for legacy directory location! ($HOME/.rebos-base -> $XDG_STATE_HOME/rebos)
     if places::base_legacy().exists() {
         warning!("Detected Rebos base at legacy location, moving it to new location...");
-        generic!("'{}' -> '{}'", places::base_legacy().to_string(), places::base().to_string());
+        generic!(
+            "'{}' -> '{}'",
+            places::base_legacy().to_string(),
+            places::base().to_string()
+        );
 
         if places::base().exists() {
             match fs_action::delete(&places::base()) {
                 Ok(_) => (),
                 Err(e) => {
-                    fatal!("Failed to delete directory: '{}'", places::base().to_string());
+                    fatal!(
+                        "Failed to delete directory: '{}'",
+                        places::base().to_string()
+                    );
                     println!("{e:#?}");
 
                     return ExitCode::Fail;
-                },
+                }
             };
         }
 
         match fs_action::mv(&places::base_legacy(), &places::base()) {
             Ok(_) => (),
             Err(e) => {
-                fatal!("Failed to move directory ('{}') to new location: '{}'", places::base_legacy().to_string(), places::base().to_string());
+                fatal!(
+                    "Failed to move directory ('{}') to new location: '{}'",
+                    places::base_legacy().to_string(),
+                    places::base().to_string()
+                );
                 println!("{e:#?}");
 
                 return ExitCode::Fail;
-            },
+            }
         };
 
         success!("Moved Rebos base directory to new location!");
@@ -113,7 +123,7 @@ fn app() -> ExitCode {
                 error!("It seems that the program is not set up!");
                 return ExitCode::Fail;
             }
-        },
+        }
     }
 
     #[allow(unreachable_patterns)]
@@ -132,31 +142,31 @@ fn app() -> ExitCode {
                         Ok(_) => success!("Committed generation successfully! (\"{}\")", c.msg),
                         Err(_) => return ExitCode::Fail,
                     };
-                },
+                }
                 cli::GenCommands::List => {
                     match generation::list_print() {
                         Ok(_) => (),
                         Err(_) => return ExitCode::Fail,
                     };
-                },
+                }
                 cli::GenCommands::CleanDups => {
                     match generation::management::clean_dups(true) {
                         Ok(o) => success!("Deleted {o} generations!"),
                         Err(_) => return ExitCode::Fail,
                     };
-                },
+                }
                 cli::GenCommands::Align => {
                     match generation::management::align(true) {
                         Ok(o) => success!("Aligned {o} generations!"),
                         Err(_) => return ExitCode::Fail,
                     };
-                },
+                }
                 cli::GenCommands::TidyUp => {
                     match generation::management::tidy_up() {
                         Ok(_) => (),
                         Err(_) => return ExitCode::Fail,
                     };
-                },
+                }
                 cli::GenCommands::Info => {
                     let generation = match generation::gen(ConfigSide::User) {
                         Ok(o) => o,
@@ -164,13 +174,16 @@ fn app() -> ExitCode {
                     };
 
                     obj_print::generation(&generation);
-                },
+                }
                 cli::GenCommands::Latest => {
-                    info!("Latest generation number is: {}", match generation::latest_number() {
-                        Ok(o) => o,
-                        Err(_) => return ExitCode::Fail,
-                    });
-                },
+                    info!(
+                        "Latest generation number is: {}",
+                        match generation::latest_number() {
+                            Ok(o) => o,
+                            Err(_) => return ExitCode::Fail,
+                        }
+                    );
+                }
                 cli::GenCommands::DeleteOld(h) => {
                     info!("Deleting old generations...");
 
@@ -178,15 +191,17 @@ fn app() -> ExitCode {
                         Ok(_) => success!("Successfully deleted {} generations!", h.how_many),
                         Err(_) => return ExitCode::Fail,
                     };
-                },
+                }
                 cli::GenCommands::Delete(g) => {
                     match generation::delete(g.generation, true) {
                         Ok(_) => (), // Handled by delete().
                         Err(_) => return ExitCode::Fail,
                     };
-                },
+                }
                 cli::GenCommands::Diff { old, new } => {
-                    if generation::gen_exists(*old) == false || generation::gen_exists(*new) == false {
+                    if generation::gen_exists(*old) == false
+                        || generation::gen_exists(*new) == false
+                    {
                         fatal!("Generation not found!");
 
                         return ExitCode::Fail;
@@ -210,7 +225,7 @@ fn app() -> ExitCode {
                     println!("");
 
                     library::print_history_gen(&history);
-                },
+                }
                 cli::GenCommands::Current { command } => {
                     match command {
                         cli::CurrentCommands::Build => {
@@ -220,7 +235,7 @@ fn app() -> ExitCode {
                                 Ok(_) => success!("Built generation successfully!"),
                                 Err(_) => return ExitCode::Fail,
                             };
-                        },
+                        }
                         cli::CurrentCommands::Rollback(r) => {
                             info!("Rolling back by {} generations...", r.by);
 
@@ -228,7 +243,7 @@ fn app() -> ExitCode {
                                 Ok(_) => success!("Rolled back successfully!"),
                                 Err(_) => return ExitCode::Fail,
                             };
-                        },
+                        }
                         cli::CurrentCommands::ToLatest => {
                             info!("Jumping to latest generation...");
 
@@ -236,7 +251,7 @@ fn app() -> ExitCode {
                                 Ok(_) => success!("Jumped to latest successfully!"),
                                 Err(_) => return ExitCode::Fail,
                             };
-                        },
+                        }
                         cli::CurrentCommands::Set(s) => {
                             info!("Jumping to generation {}...", s.to);
 
@@ -244,24 +259,24 @@ fn app() -> ExitCode {
                                 Ok(_) => success!("Jumped to generation {} successfully!", s.to),
                                 Err(_) => return ExitCode::Fail,
                             };
-                        },
+                        }
                         _ => {
                             error!("Command not usable yet!");
                             return ExitCode::Fail;
-                        },
+                        }
                     };
-                },
+                }
                 _ => {
                     error!("Command not usable yet!");
                     return ExitCode::Fail;
-                },
+                }
             };
 
             match lock::lock_off() {
                 Ok(_) => (),
                 Err(_) => return ExitCode::Fail,
             };
-        },
+        }
         cli::Commands::Setup => {
             info!("Beginning setup...");
 
@@ -269,7 +284,7 @@ fn app() -> ExitCode {
                 Ok(_) => success!("Set up the program successfully!"),
                 Err(_) => return ExitCode::Fail,
             };
-        },
+        }
         cli::Commands::Config { command } => {
             match command {
                 cli::ConfigCommands::Init => {
@@ -279,7 +294,7 @@ fn app() -> ExitCode {
                         Ok(_) => success!("Created user configuration successfully!"),
                         Err(_) => return ExitCode::Fail,
                     };
-                },
+                }
                 cli::ConfigCommands::Check => {
                     let result = match config::check_config() {
                         Ok(o) => o,
@@ -292,15 +307,19 @@ fn app() -> ExitCode {
                             config::print_errors_and_misc_info(&e, &misc_info);
 
                             return ExitCode::Fail;
-                        },
+                        }
                     };
-                },
+                }
             };
-        },
+        }
         cli::Commands::ForceUnlock => {
             if lock::is_lock_on() {
-                piglog::warning!("Force unlocking could harm the system if done with the wrong reason!");
-                piglog::warning!("You should only force unlock if you know that you ABSOLUTELY need to!");
+                piglog::warning!(
+                    "Force unlocking could harm the system if done with the wrong reason!"
+                );
+                piglog::warning!(
+                    "You should only force unlock if you know that you ABSOLUTELY need to!"
+                );
                 piglog::warning!(
                     "{} {} {}",
                     "Really the ONLY time you should do this is if there is only",
@@ -330,27 +349,23 @@ fn app() -> ExitCode {
                             piglog::fatal!("Failed to unlock: {e}");
 
                             return ExitCode::Fail;
-                        },
+                        }
                     };
-                }
-
-                else {
+                } else {
                     piglog::info!("Aborting...");
 
                     return ExitCode::Fail;
                 }
-            }
-
-            else {
+            } else {
                 piglog::info!("Not locked... skipping...");
             }
-        },
+        }
         cli::Commands::IsUnlocked => {
             match lock::is_lock_on() {
                 false => return ExitCode::Success,
                 true => return ExitCode::Fail,
             };
-        },
+        }
         cli::Commands::Managers { command } => {
             match command {
                 cli::ManagerCommands::Sync => {
@@ -358,35 +373,41 @@ fn app() -> ExitCode {
                         Ok(_) => (),
                         Err(_) => return ExitCode::Fail,
                     };
-                },
+                }
                 cli::ManagerCommands::Upgrade { sync } => {
                     match management::upgrade_all(*sync) {
                         Ok(_) => (),
                         Err(_) => return ExitCode::Fail,
                     };
-                },
+                }
+                cli::ManagerCommands::RemoveOther => {
+                    match management::remove_other_all() {
+                        Ok(_) => (),
+                        Err(_) => return ExitCode::Fail,
+                    };
+                }
             };
-        },
+        }
         cli::Commands::API { command } => {
             match command {
                 cli::APICommands::Echo { log_mode, message } => {
                     piglog::log_core_print(message.to_string(), *log_mode);
-                },
+                }
                 cli::APICommands::EchoGeneric { message } => {
                     piglog::log_generic_print(message.to_string());
-                },
+                }
                 cli::APICommands::BoolQuestion { question, fallback } => {
                     match bool_question(question, fallback.bool()) {
                         true => return ExitCode::Success,
                         false => return ExitCode::Fail,
                     }
-                },
+                }
             };
-        },
+        }
         _ => {
             error!("Command not usable yet!");
             return ExitCode::Fail;
-        },
+        }
     };
 
     return ExitCode::Success;
@@ -425,7 +446,7 @@ pub fn bool_question<S: AsRef<str>>(question: S, fallback: bool) -> bool {
             "" => return fallback,
             _ => {
                 eprintln!("Invalid response: '{}'", match_on);
-            },
+            }
         }
     }
 }
