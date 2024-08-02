@@ -70,8 +70,7 @@ pub enum ManagerCommands {
         /// Sync before upgrading
         sync: bool,
     },
-    // TODO: better description
-    /// Remove non-specified for all managers
+    /// Remove everything except for what is specified in the config for all managers
     RemoveOther,
 }
 
