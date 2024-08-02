@@ -325,7 +325,7 @@ pub fn upgrade_all(sync_before_upgrade: bool) -> Result<(), io::Error> {
 pub fn remove_other_all() -> Result<(), io::Error> {
     let curr_gen = gen(ConfigSide::System)?;
 
-    for (m, items) in curr_gen.managers.iter() {
+    for (m, items) in &curr_gen.managers {
         let man = load_manager(m)?;
 
         man.remove_other(&items.items)?;
