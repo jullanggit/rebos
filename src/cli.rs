@@ -34,7 +34,8 @@ pub enum Commands {
     Managers {
         #[command(subcommand)]
         command: ManagerCommands,
-        #[arg(long, short)]
+        /// Specify once per manager
+        #[arg(long = "manager", short)]
         managers: Option<Vec<String>>,
     },
     /// API for things like scripting
