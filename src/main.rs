@@ -380,7 +380,7 @@ fn app() -> ExitCode {
                         Err(_) => return ExitCode::Fail,
                     };
                 }
-                cli::ManagerCommands::RemoveOther => {
+                cli::ManagerCommands::RemoveOthers => {
                     match management::remove_others(managers) {
                         Ok(_) => (),
                         Err(_) => return ExitCode::Fail,
