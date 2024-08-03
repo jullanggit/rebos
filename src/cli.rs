@@ -70,6 +70,9 @@ pub enum ManagerCommands {
         /// Sync before upgrading
         sync: bool,
     },
+    // TODO: better description
+    /// Remove non-specified for all managers
+    RemoveOther,
 }
 
 #[derive(Subcommand, Debug)]

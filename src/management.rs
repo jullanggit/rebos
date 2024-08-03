@@ -7,6 +7,8 @@ use piglog::*;
 use serde::Deserialize;
 use std::io;
 
+use crate::config::ConfigSide;
+use crate::generation::gen;
 use crate::library::{self, *};
 use crate::places;
 
@@ -33,6 +35,7 @@ pub struct Manager {
     pub remove: String,
     pub sync: Option<String>,
     pub upgrade: Option<String>,
+    pub list: Option<String>,
     pub config: ManagerConfig,
     pub hook_name: String,
     pub plural_name: String,
@@ -155,6 +158,35 @@ impl Manager {
         crate::hook::run_hook_and_return_if_err!(format!("post_{}_upgrade", self.hook_name));
 
         Ok(())
+    }
+
+    pub fn remove_other(&self, items: &[String]) -> Result<(), io::Error> {
+        if self.list.is_some() {
+            let mut others = self.list()?;
+            others.retain(|other| !items.contains(other));
+            dbg!(&others);
+
+            self.remove(&others)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Gets a list of installed {plural_name}
+    /// Expects that the list command exists for the manager
+    pub fn list(&self) -> Result<Vec<String>, io::Error> {
+        let list_cmd = self.list.as_ref().expect("Command should exist");
+
+        match run_command_with_output(list_cmd) {
+            Some(output) => Ok(output.split_whitespace().map(|s| s.to_owned()).collect()),
+            None => {
+                let error = format!("Failed to get list of {}!", self.plural_name);
+
+                error!("{error}");
+
+                Err(custom_error(&error))
+            }
+        }
     }
 
     pub fn set_plural_name(&mut self, pn: &str) {
@@ -288,6 +320,34 @@ pub fn upgrade_managers(
     }
 
     success!("All managers upgraded successfully");
+
+    Ok(())
+}
+
+// TODO: add info and success messages
+pub fn remove_others(managers: &Option<Vec<String>>) -> Result<(), io::Error> {
+    let curr_gen = gen(ConfigSide::System)?;
+
+    match managers {
+        Some(man_names) => {
+            for man_name in man_names {
+                let man = load_manager(man_name)?;
+                let items = curr_gen
+                    .managers
+                    .get(man_name)
+                    .ok_or(custom_error("Failed to get manager {man_name}!"))?;
+
+                man.remove_other(&items.items)?;
+            }
+        }
+        None => {
+            for (man_name, items) in curr_gen.managers.iter() {
+                let man = load_manager(man_name)?;
+
+                man.remove_other(&items.items)?;
+            }
+        }
+    };
 
     Ok(())
 }

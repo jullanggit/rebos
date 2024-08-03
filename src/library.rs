@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 
+use colored::Colorize;
+use hashbrown::HashMap;
+use piglog::prelude::*;
 use std::io;
 use std::process::Command;
-use colored::Colorize;
 use users::get_current_username;
-use piglog::prelude::*;
-use hashbrown::HashMap;
 
 use crate::convert::*;
 use crate::generation::Generation;
@@ -21,7 +21,8 @@ pub struct History {
     pub line: String,
 }
 
-pub fn abort() { // Try not to use this function!
+pub fn abort() {
+    // Try not to use this function!
     std::process::exit(1);
 }
 
@@ -29,7 +30,20 @@ pub fn run_command(command: &str) -> bool {
     match Command::new("bash").args(["-c", command]).status() {
         Ok(o) => o,
         Err(_e) => return false,
-    }.success()
+    }
+    .success()
+}
+
+pub fn run_command_with_output(command: &str) -> Option<String> {
+    match Command::new("bash").args(["-c", command]).output() {
+        Ok(output) => {
+            if !output.status.success() {
+                return None;
+            }
+            String::from_utf8(output.stdout).ok()
+        }
+        Err(_e) => None,
+    }
 }
 
 pub fn cut(full: &str, fword: u32, dword: char) -> String {
@@ -110,11 +124,20 @@ pub fn history_gen(gen_1: &Generation, gen_2: &Generation) -> HashMap<String, Ve
         let items_2 = gen_2.managers.get(i).unwrap();
 
         match gen_1.managers.get(i) {
-            Some(items_1) => history_map.insert(i.to_string(), history(&items_1.items, &items_2.items)),
-            None => history_map.insert(i.to_string(), items_2.items.iter().map(|x| History {
-                mode: HistoryMode::Add,
-                line: x.to_string(),
-            }).collect()),
+            Some(items_1) => {
+                history_map.insert(i.to_string(), history(&items_1.items, &items_2.items))
+            }
+            None => history_map.insert(
+                i.to_string(),
+                items_2
+                    .items
+                    .iter()
+                    .map(|x| History {
+                        mode: HistoryMode::Add,
+                        line: x.to_string(),
+                    })
+                    .collect(),
+            ),
         };
     }
 
@@ -123,10 +146,19 @@ pub fn history_gen(gen_1: &Generation, gen_2: &Generation) -> HashMap<String, Ve
 
         match gen_2.managers.get(i) {
             Some(_) => (),
-            None => { history_map.insert(i.to_string(), items_1.items.iter().map(|x| History {
-                mode: HistoryMode::Remove,
-                line: x.to_string(),
-            }).collect()); },
+            None => {
+                history_map.insert(
+                    i.to_string(),
+                    items_1
+                        .items
+                        .iter()
+                        .map(|x| History {
+                            mode: HistoryMode::Remove,
+                            line: x.to_string(),
+                        })
+                        .collect(),
+                );
+            }
         };
     }
 
