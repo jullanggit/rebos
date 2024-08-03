@@ -1,13 +1,13 @@
 #![allow(dead_code)]
 
-use std::io;
-use serde::Deserialize;
+use colored::Colorize;
+use fspp::*;
 use piglog::prelude::*;
 use piglog::*;
-use fspp::*;
-use colored::Colorize;
+use serde::Deserialize;
+use std::io;
 
-use crate::library::{ self, * };
+use crate::library::{self, *};
 use crate::places;
 
 #[derive(Deserialize, Debug)]
@@ -50,9 +50,7 @@ impl Manager {
 
         if many {
             self.add_raw(&self.join_args(items))?;
-        }
-
-        else {
+        } else {
             for i in items {
                 self.add_raw(i)?;
             }
@@ -70,9 +68,7 @@ impl Manager {
 
         if many {
             self.remove_raw(&self.join_args(items))?;
-        }
-
-        else {
+        } else {
             for i in items {
                 self.remove_raw(i)?;
             }
@@ -93,8 +89,10 @@ impl Manager {
             false => {
                 error!("Failed to add {}!", self.plural_name);
 
-                return Err(custom_error(format!("Failed to add {}!", self.plural_name).as_str()));
-            },
+                return Err(custom_error(
+                    format!("Failed to add {}!", self.plural_name).as_str(),
+                ));
+            }
         };
 
         Ok(())
@@ -110,8 +108,10 @@ impl Manager {
             false => {
                 error!("Failed to remove {}!", self.plural_name);
 
-                return Err(custom_error(format!("Failed to remove {}!", self.plural_name).as_str()));
-            },
+                return Err(custom_error(
+                    format!("Failed to remove {}!", self.plural_name).as_str(),
+                ));
+            }
         };
 
         Ok(())
@@ -127,7 +127,7 @@ impl Manager {
                     error!("Failed to sync manager! ('{}')", self.plural_name);
 
                     return Err(custom_error("Failed to sync repositories!"));
-                },
+                }
             };
         }
 
@@ -145,8 +145,10 @@ impl Manager {
                 false => {
                     error!("Failed to upgrade {}!", self.plural_name);
 
-                    return Err(custom_error(format!("Failed to upgrade {}!", self.plural_name).as_str()));
-                },
+                    return Err(custom_error(
+                        format!("Failed to upgrade {}!", self.plural_name).as_str(),
+                    ));
+                }
             };
         }
 
@@ -165,7 +167,10 @@ impl Manager {
         let valid_hook_name = fspp::filename_safe_string(&self.hook_name);
 
         if self.hook_name != valid_hook_name {
-            errors.push(format!("Field 'hook_name' must be filename safe! (Fixed version: {})", valid_hook_name));
+            errors.push(format!(
+                "Field 'hook_name' must be filename safe! (Fixed version: {})",
+                valid_hook_name
+            ));
         }
 
         if errors.len() > 0 {
@@ -183,10 +188,13 @@ pub fn load_manager_no_config_check(man: &str) -> Result<Manager, io::Error> {
         Ok(o) => o,
         Err(e) => {
             piglog::fatal!("Failed to read manager file! ({man})");
-            piglog::note!("If this error shows up, it is possible the file is missing. ({})", path.to_string());
+            piglog::note!(
+                "If this error shows up, it is possible the file is missing. ({})",
+                path.to_string()
+            );
 
             return Err(e);
-        },
+        }
     };
 
     let manager: Manager = match toml::from_str(&man_string) {
@@ -195,8 +203,11 @@ pub fn load_manager_no_config_check(man: &str) -> Result<Manager, io::Error> {
             piglog::fatal!("Failed to deserialize manager! ({man})");
             piglog::fatal!("Error: {e:#?}");
 
-            return Err(io::Error::new(io::ErrorKind::Other, "Failed to deserialize manager!"));
-        },
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Failed to deserialize manager!",
+            ));
+        }
     };
 
     Ok(manager)
@@ -211,17 +222,25 @@ pub fn load_manager(man: &str) -> Result<Manager, io::Error> {
             piglog::fatal!("Manager '{man}' is not configured properly! Errors:");
 
             for (i, error) in e.into_iter().enumerate() {
-                eprintln!("{}{} {}", i.to_string().bright_red().bold(), ":".bright_black().bold(), error);
+                eprintln!(
+                    "{}{} {}",
+                    i.to_string().bright_red().bold(),
+                    ":".bright_black().bold(),
+                    error
+                );
             }
 
-            return Err(io::Error::new(io::ErrorKind::Other, "Failed manager configuration check!"));
-        },
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "Failed manager configuration check!",
+            ));
+        }
     };
 
     Ok(manager)
 }
 
-pub fn managers() -> Result<Vec<String>, io::Error> {
+pub fn get_managers() -> Result<Vec<String>, io::Error> {
     let path = places::base_user().add_str("managers");
 
     let man_list: Vec<String> = directory::list_items(&path)?
@@ -232,40 +251,43 @@ pub fn managers() -> Result<Vec<String>, io::Error> {
     Ok(man_list)
 }
 
-pub fn sync_all() -> Result<(), io::Error> {
-    let m_all = managers()?;
-    let m_len = m_all.len();
+pub fn sync_managers(managers: &Option<Vec<String>>) -> Result<(), io::Error> {
+    let man_names = match *managers {
+        Some(ref man_names) => man_names,
+        None => &get_managers()?,
+    };
+    for man_name in man_names {
+        info!("Syncing manager {man_name}");
 
-    info!("Syncing {} managers...", m_len);
-
-    for m in m_all {
-        let man = load_manager(&m)?;
-
-        man.sync()?;
+        let manager = load_manager(man_name)?;
+        manager.sync()?;
     }
-
-    success!("All {} managers synced successfully!", m_len);
+    success!("All managers synced successfully");
 
     Ok(())
 }
 
-pub fn upgrade_all(sync_before_upgrade: bool) -> Result<(), io::Error> {
+pub fn upgrade_managers(
+    sync_before_upgrade: bool,
+    managers: &Option<Vec<String>>,
+) -> Result<(), io::Error> {
     if sync_before_upgrade {
-        sync_all()?;
+        sync_managers(managers)?;
     }
 
-    let m_all = managers()?;
-    let m_len = m_all.len();
+    let man_names = match *managers {
+        Some(ref man_names) => man_names,
+        None => &get_managers()?,
+    };
 
-    info!("Upgrading {} managers...", m_len);
+    for man_name in man_names {
+        info!("Upgrading manager {man_name}");
 
-    for m in m_all {
-        let man = load_manager(&m)?;
-
-        man.upgrade()?;
+        let manager = load_manager(man_name)?;
+        manager.upgrade()?;
     }
 
-    success!("All {} managers upgraded successfully!", m_len);
+    success!("All managers upgraded successfully");
 
     Ok(())
 }

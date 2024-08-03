@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use clap::{ Parser, Subcommand, ValueEnum };
+use clap::{Parser, Subcommand, ValueEnum};
 use piglog::LogMode;
 
 #[derive(Parser)]
@@ -34,6 +34,8 @@ pub enum Commands {
     Managers {
         #[command(subcommand)]
         command: ManagerCommands,
+        #[arg(long, short)]
+        managers: Option<Vec<String>>,
     },
     /// API for things like scripting
     API {
@@ -45,14 +47,9 @@ pub enum Commands {
 #[derive(Subcommand, Debug)]
 pub enum APICommands {
     /// Use the Rebos log message system
-    Echo {
-        log_mode: LogMode,
-        message: String,
-    },
+    Echo { log_mode: LogMode, message: String },
     /// Use the Rebos log message system (Generic)
-    EchoGeneric {
-        message: String,
-    },
+    EchoGeneric { message: String },
     /// Use Rebos to ask the user for a boolean yes or no question (Exit Status: (0 = Yes, 1 = No))
     BoolQuestion {
         /// Question to be asked
