@@ -34,7 +34,7 @@ pub enum Commands {
     Managers {
         #[command(subcommand)]
         command: ManagerCommands,
-        /// Specify once per manager
+        /// Default: all, specify once per manager
         #[arg(long = "manager", short)]
         managers: Option<Vec<String>>,
     },
@@ -62,16 +62,16 @@ pub enum APICommands {
 
 #[derive(Subcommand, Debug)]
 pub enum ManagerCommands {
-    /// Sync all managers
+    /// Sync managers
     Sync,
-    /// Upgrade all managers
+    /// Upgrade managers
     Upgrade {
         #[clap(long)]
         /// Sync before upgrading
         sync: bool,
     },
-    /// Remove everything except for what is specified in the config for all managers
-    RemoveOther,
+    /// Remove any items that arent specified in the config
+    RemoveOthers,
 }
 
 #[derive(Subcommand, Debug)]
