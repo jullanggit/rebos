@@ -70,8 +70,12 @@ pub enum ManagerCommands {
         /// Sync before upgrading
         sync: bool,
     },
-    /// Remove any items that arent specified in the config
-    RemoveOthers,
+    /// List all installed items that arent specified in the config (requires list command)
+    ListOthers {
+        #[clap(long)]
+        /// Remove all non specified items
+        remove: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]

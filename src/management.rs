@@ -8,9 +8,10 @@ use serde::Deserialize;
 use std::io;
 
 use crate::config::ConfigSide;
-use crate::generation::gen;
+use crate::generation::{gen, Items};
 use crate::library::{self, *};
-use crate::places;
+use crate::obj_print_boilerplate::macros::print_entry;
+use crate::{bool_question, places};
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields, default)]
@@ -160,15 +161,14 @@ impl Manager {
         Ok(())
     }
 
-    pub fn remove_other(&self, items: &[String]) -> Result<(), io::Error> {
+    /// Returns a vector of all installed items that arent in the managers list
+    pub fn get_other(&self, items: &[String]) -> Result<Vec<String>, io::Error> {
         if self.list.is_some() {
             let mut others = self.list()?;
             others.retain(|other| !items.contains(other));
-            dbg!(&others);
-
-            self.remove(&others)
+            Ok(others)
         } else {
-            Ok(())
+            Ok(Vec::new())
         }
     }
 
@@ -325,29 +325,42 @@ pub fn upgrade_managers(
 }
 
 // TODO: add info and success messages
-pub fn remove_others(managers: &Option<Vec<String>>) -> Result<(), io::Error> {
+pub fn list_others(managers: &Option<Vec<String>>, remove: bool) -> Result<(), io::Error> {
     let curr_gen = gen(ConfigSide::System)?;
 
+    info!("Installed but not specified items");
     match managers {
         Some(man_names) => {
             for man_name in man_names {
-                let man = load_manager(man_name)?;
                 let items = curr_gen
                     .managers
                     .get(man_name)
                     .ok_or(custom_error("Failed to get manager {man_name}!"))?;
 
-                man.remove_other(&items.items)?;
+                list_others_core(man_name, items, remove)?;
             }
         }
         None => {
             for (man_name, items) in curr_gen.managers.iter() {
-                let man = load_manager(man_name)?;
-
-                man.remove_other(&items.items)?;
+                list_others_core(man_name, items, remove)?;
             }
         }
     };
 
+    Ok(())
+}
+
+fn list_others_core(man_name: &String, items: &Items, remove: bool) -> Result<(), io::Error> {
+    let man = load_manager(man_name)?;
+
+    let others = man.get_other(&items.items)?;
+
+    if !others.is_empty() {
+        print_entry!(man_name, others);
+
+        if remove && bool_question("Remove items?", false) {
+            man.remove(&others)?;
+        }
+    };
     Ok(())
 }
