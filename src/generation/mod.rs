@@ -2,23 +2,23 @@
 
 pub mod management;
 
-use std::io;
 use colored::Colorize;
-use serde::{Serialize, Deserialize};
+use fspp::*;
 use hashbrown::HashMap;
 use piglog::prelude::*;
 use piglog::*;
-use fspp::*;
+use serde::{Deserialize, Serialize};
+use std::io;
 
+use crate::config::config_for;
+use crate::config::{Config, ConfigSide};
 use crate::hook::run_hook_and_return_if_err;
-use crate::places;
 use crate::library;
 use crate::library::*;
-use crate::management::load_manager;
-use crate::config::{Config, ConfigSide};
-use crate::config::config_for;
-use crate::system;
 use crate::lock::*;
+use crate::management::load_manager;
+use crate::places;
+use crate::system;
 
 trait Migrate<T> {
     fn migrate(self) -> T;
@@ -48,14 +48,12 @@ pub struct Items {
 
 impl Default for Items {
     fn default() -> Self {
-        Self {
-            items: Vec::new(),
-        }
+        Self { items: Vec::new() }
     }
 }
 
 pub mod legacy_1 {
-    use serde::{ Serialize, Deserialize };
+    use serde::{Deserialize, Serialize};
 
     use super::Migrate;
 
@@ -71,13 +69,24 @@ pub mod legacy_1 {
     impl Migrate<super::legacy_2::Generation> for Generation {
         fn migrate(self) -> super::legacy_2::Generation {
             let mut gen = super::legacy_2::Generation::default();
-    
+
             gen.imports = self.imports;
-    
-            gen.pkg_managers.insert("system".to_string(), super::legacy_2::Packages { pkgs: self.pkgs });
-            gen.pkg_managers.insert("flatpak".to_string(), super::legacy_2::Packages { pkgs: self.flatpaks });
-            gen.pkg_managers.insert("cargo".to_string(), super::legacy_2::Packages { pkgs: self.crates });
-    
+
+            gen.pkg_managers.insert(
+                "system".to_string(),
+                super::legacy_2::Packages { pkgs: self.pkgs },
+            );
+            gen.pkg_managers.insert(
+                "flatpak".to_string(),
+                super::legacy_2::Packages {
+                    pkgs: self.flatpaks,
+                },
+            );
+            gen.pkg_managers.insert(
+                "cargo".to_string(),
+                super::legacy_2::Packages { pkgs: self.crates },
+            );
+
             gen
         }
     }
@@ -85,13 +94,20 @@ pub mod legacy_1 {
     impl Migrate<super::Generation> for Generation {
         fn migrate(self) -> super::Generation {
             let mut gen = super::Generation::default();
-    
+
             gen.imports = self.imports;
-    
-            gen.managers.insert("system".to_string(), super::Items { items: self.pkgs });
-            gen.managers.insert("flatpak".to_string(), super::Items { items: self.flatpaks });
-            gen.managers.insert("cargo".to_string(), super::Items { items: self.crates });
-    
+
+            gen.managers
+                .insert("system".to_string(), super::Items { items: self.pkgs });
+            gen.managers.insert(
+                "flatpak".to_string(),
+                super::Items {
+                    items: self.flatpaks,
+                },
+            );
+            gen.managers
+                .insert("cargo".to_string(), super::Items { items: self.crates });
+
             gen
         }
     }
@@ -109,8 +125,8 @@ pub mod legacy_1 {
 }
 
 pub mod legacy_2 {
-    use serde::{ Serialize, Deserialize };
     use hashbrown::HashMap;
+    use serde::{Deserialize, Serialize};
 
     use super::Migrate;
 
@@ -122,9 +138,7 @@ pub mod legacy_2 {
 
     impl Default for Packages {
         fn default() -> Self {
-            Self {
-                pkgs: Vec::new(),
-            }
+            Self { pkgs: Vec::new() }
         }
     }
 
@@ -142,9 +156,7 @@ pub mod legacy_2 {
             gen.imports = self.imports;
 
             for (key, value) in self.pkg_managers.into_iter() {
-                gen.managers.insert(key, super::Items {
-                    items: value.pkgs,
-                });
+                gen.managers.insert(key, super::Items { items: value.pkgs });
             }
 
             gen
@@ -183,11 +195,18 @@ impl GenerationUtils for Generation {
 
         for i in other_gen.managers.keys() {
             match self.managers.get_mut(i) {
-                Some(s) => s.items.extend(other_gen.managers.get(i).unwrap().items.clone()),
+                Some(s) => s
+                    .items
+                    .extend(other_gen.managers.get(i).unwrap().items.clone()),
                 None => {
-                    self.managers.insert(i.to_string(), Items { items: Vec::new() });
-                    self.managers.get_mut(i).unwrap().items.extend(other_gen.managers.get(i).unwrap().items.clone());
-                },
+                    self.managers
+                        .insert(i.to_string(), Items { items: Vec::new() });
+                    self.managers
+                        .get_mut(i)
+                        .unwrap()
+                        .items
+                        .extend(other_gen.managers.get(i).unwrap().items.clone());
+                }
             };
         }
     }
@@ -211,14 +230,23 @@ pub fn gen(side: ConfigSide) -> Result<Generation, io::Error> {
     };
 
     if side == ConfigSide::User {
-        generation.extend(read_to_gen(&places::base_user().add_str("machines").add_str(&system_hostname).add_str("gen.toml"))?);
+        generation.extend(read_to_gen(
+            &places::base_user()
+                .add_str("machines")
+                .add_str(&system_hostname)
+                .add_str("gen.toml"),
+        )?);
     }
 
     while generation.imports.len() > 0 {
         let gen_imports = generation.imports.clone();
 
         for i in gen_imports.iter() {
-            let i_gen = read_to_gen(&places::base_user().add_str("imports").add_str(&format!("{i}.toml")))?;
+            let i_gen = read_to_gen(
+                &places::base_user()
+                    .add_str("imports")
+                    .add_str(&format!("{i}.toml")),
+            )?;
 
             generation.extend(i_gen);
         }
@@ -231,7 +259,11 @@ pub fn gen(side: ConfigSide) -> Result<Generation, io::Error> {
             }
         }
 
-        generation.imports = generation.imports.into_iter().filter(|x| *x != String::new()).collect();
+        generation.imports = generation
+            .imports
+            .into_iter()
+            .filter(|x| *x != String::new())
+            .collect();
     }
 
     Ok(generation)
@@ -248,7 +280,7 @@ macro_rules! deserialize_legacy {
                     Err(_) => should_try = true,
                     _ => (),
                 };
-            },
+            }
         };
 
         if should_try {
@@ -257,12 +289,15 @@ macro_rules! deserialize_legacy {
                     success!("Deserialized generation in legacy mode {}.x.x!", $version);
 
                     $gen = Some(Ok(o.migrate()));
-                },
+                }
                 Err(e) => {
-                    error!("Failed to deserialize generation in legacy mode {}.x.x!", $version);
+                    error!(
+                        "Failed to deserialize generation in legacy mode {}.x.x!",
+                        $version
+                    );
 
                     $gen = Some(Err(e));
-                },
+                }
             };
         }
     };
@@ -275,13 +310,16 @@ fn read_to_gen(path: &Path) -> Result<Generation, io::Error> {
         Err(e) => {
             error!("Failed to read generation TOML file!");
             return Err(e);
-        },
+        }
     };
 
     Ok(match toml::from_str(&gen_string) {
         Ok(o) => o,
         Err(e) => {
-            warning!("Failed to deserialize generation, attempting legacy modes... ('{}')", path.to_string());
+            warning!(
+                "Failed to deserialize generation, attempting legacy modes... ('{}')",
+                path.to_string()
+            );
 
             let mut gen: Option<Result<Generation, toml::de::Error>> = None;
 
@@ -298,32 +336,42 @@ fn read_to_gen(path: &Path) -> Result<Generation, io::Error> {
                             error!("Path: '{}'", path.to_string());
 
                             return Err(custom_error("Failed to deserialize generation!"));
-                        },
+                        }
                     }
-                },
+                }
                 None => unreachable!(),
             }
-        },
+        }
     })
 }
 
 // Does the generation specified exist?
 pub fn gen_exists(gen_id: usize) -> bool {
-    let path = places::gens().add_str(&gen_id.to_string()).add_str("gen.toml");
+    let path = places::gens()
+        .add_str(&gen_id.to_string())
+        .add_str("gen.toml");
 
     path.exists()
 }
 
 // Get generation for the id
 pub fn get_gen_from_usize(gen_id: usize) -> Result<Generation, io::Error> {
-    let generation = read_to_gen(&places::gens().add_str(&gen_id.to_string()).add_str("gen.toml"))?;
+    let generation = read_to_gen(
+        &places::gens()
+            .add_str(&gen_id.to_string())
+            .add_str("gen.toml"),
+    )?;
 
     return Ok(generation);
 }
 
 // Get generation commit for the id
 pub fn get_gen_commit_from_usize(gen_id: usize) -> Result<String, io::Error> {
-    let gen_commit = file::read(&places::gens().add_str(&gen_id.to_string()).add_str("commit"))?;
+    let gen_commit = file::read(
+        &places::gens()
+            .add_str(&gen_id.to_string())
+            .add_str("commit"),
+    )?;
 
     return Ok(gen_commit);
 }
@@ -343,8 +391,10 @@ pub fn latest_number() -> Result<usize, io::Error> {
         Some(s) => s,
         None => {
             error!("Failed to get max number in generation numbers list!");
-            return Err(custom_error("Failed to get max number in generation number list!"));
-        },
+            return Err(custom_error(
+                "Failed to get max number in generation number list!",
+            ));
+        }
     };
 
     return Ok(latest_num);
@@ -371,7 +421,7 @@ pub fn commit(msg: &str) -> Result<(), io::Error> {
         Err(_e) => {
             error!("Failed to convert user generation to string!");
             return Err(custom_error("Failed to convert user generation to string!"));
-        },
+        }
     };
 
     match directory::create(&gen_dir) {
@@ -379,7 +429,7 @@ pub fn commit(msg: &str) -> Result<(), io::Error> {
         Err(e) => {
             error!("Failed to create generation directory!");
             return Err(e);
-        },
+        }
     };
 
     let files = vec![
@@ -398,16 +448,16 @@ pub fn commit(msg: &str) -> Result<(), io::Error> {
                     Err(e) => {
                         error!("Failed to delete generation directory!");
                         return Err(e);
-                    },
+                    }
                 };
 
                 return Err(e);
-            },
+            }
         };
     }
 
     match set_current(generation_number, true) {
-        Ok(_o) => {},
+        Ok(_o) => {}
         Err(e) => return Err(e),
     };
 
@@ -428,7 +478,7 @@ fn get_order(gen: &Generation) -> Result<Vec<String>, io::Error> {
                     error!("TOML Error: {e:#?}");
 
                     return Err(custom_error("Failed to deserialize manager_order.toml!"));
-                },
+                }
             };
 
             let mut order: Vec<String> = order_obj.begin.clone();
@@ -463,11 +513,16 @@ fn get_order(gen: &Generation) -> Result<Vec<String>, io::Error> {
                 warning!("Duplicates in manager_order.toml! (Found {value} of: '{key}')");
             }
 
-            order.into_iter().filter(|x| gen.managers.contains_key(x)).collect()
-        }
-
-        else {
-            gen.managers.keys().into_iter().map(|x| x.to_string()).collect()
+            order
+                .into_iter()
+                .filter(|x| gen.managers.contains_key(x))
+                .collect()
+        } else {
+            gen.managers
+                .keys()
+                .into_iter()
+                .map(|x| x.to_string())
+                .collect()
         }
     };
 
@@ -498,7 +553,7 @@ pub fn build() -> Result<(), io::Error> {
 
             let curr_order: Vec<String> = get_order(&curr_gen)?;
 
-            // Add new items, remove old items.
+            // Remove old items, add new items,
             for i in curr_order.iter() {
                 let man = load_manager(i)?;
 
@@ -518,19 +573,26 @@ pub fn build() -> Result<(), io::Error> {
                             };
                         }
 
-                        man.add(&to_install)?;
                         man.remove(&to_remove)?;
+                        man.add(&to_install)?;
 
                         summary_entries.insert(i.to_string(), diffs);
-                    },
+                    }
                     None => {
                         man.add(&curr_items.items)?;
 
-                        summary_entries.insert(i.to_string(), curr_items.items.iter().map(|x| History {
-                            mode: HistoryMode::Add,
-                            line: x.to_string(),
-                        }).collect());
-                    },
+                        summary_entries.insert(
+                            i.to_string(),
+                            curr_items
+                                .items
+                                .iter()
+                                .map(|x| History {
+                                    mode: HistoryMode::Add,
+                                    line: x.to_string(),
+                                })
+                                .collect(),
+                        );
+                    }
                 }
             }
 
@@ -547,11 +609,18 @@ pub fn build() -> Result<(), io::Error> {
 
                         man.remove(&built_items.items)?;
 
-                        summary_entries.insert(i.to_string(), built_items.items.iter().map(|x| History {
-                            mode: HistoryMode::Remove,
-                            line: x.to_string(),
-                        }).collect());
-                    },
+                        summary_entries.insert(
+                            i.to_string(),
+                            built_items
+                                .items
+                                .iter()
+                                .map(|x| History {
+                                    mode: HistoryMode::Remove,
+                                    line: x.to_string(),
+                                })
+                                .collect(),
+                        );
+                    }
                 };
             }
 
@@ -569,7 +638,7 @@ pub fn build() -> Result<(), io::Error> {
 
             println!("");
             println!("");
-        },
+        }
         Err(_) => {
             let curr_order = get_order(&curr_gen)?;
 
@@ -582,11 +651,11 @@ pub fn build() -> Result<(), io::Error> {
             }
 
             note!("There is no summary. (First time building.)");
-        },
+        }
     };
 
     match set_built(current_num, true) {
-        Ok(_o) => {},
+        Ok(_o) => {}
         Err(e) => return Err(e),
     };
 
@@ -607,7 +676,7 @@ pub fn rollback(by: isize, verbose: bool) -> Result<(), io::Error> {
     let new_current = (current_num as isize) - by;
 
     match set_current(new_current as usize, verbose) {
-        Ok(_o) => {},
+        Ok(_o) => {}
         Err(e) => return Err(e),
     };
 
@@ -618,11 +687,14 @@ pub fn rollback(by: isize, verbose: bool) -> Result<(), io::Error> {
 pub fn latest(verbose: bool) -> Result<(), io::Error> {
     abort_if_locked();
 
-    match set_current(match latest_number() {
-        Ok(o) => o,
-        Err(e) => return Err(e),
-    }, verbose) {
-        Ok(_o) => {},
+    match set_current(
+        match latest_number() {
+            Ok(o) => o,
+            Err(e) => return Err(e),
+        },
+        verbose,
+    ) {
+        Ok(_o) => {}
         Err(e) => return Err(e),
     };
 
@@ -633,10 +705,12 @@ pub fn latest(verbose: bool) -> Result<(), io::Error> {
 pub fn set_current(to: usize, verbose: bool) -> Result<(), io::Error> {
     abort_if_locked();
 
-    if to > match latest_number() {
-        Ok(o) => o,
-        Err(e) => return Err(e),
-    } {
+    if to
+        > match latest_number() {
+            Ok(o) => o,
+            Err(e) => return Err(e),
+        }
+    {
         error!("Out of range! Too high!");
         return Err(custom_error("Out of range!"));
     }
@@ -653,11 +727,11 @@ pub fn set_current(to: usize, verbose: bool) -> Result<(), io::Error> {
             }
 
             return Ok(());
-        },
+        }
         Err(e) => {
             error!("Failed to create/write 'current' tracking file!");
             return Err(e);
-        },
+        }
     };
 }
 
@@ -665,10 +739,12 @@ pub fn set_current(to: usize, verbose: bool) -> Result<(), io::Error> {
 pub fn set_built(to: usize, verbose: bool) -> Result<(), io::Error> {
     abort_if_locked();
 
-    if to > match latest_number() {
-        Ok(o) => o,
-        Err(e) => return Err(e),
-    } {
+    if to
+        > match latest_number() {
+            Ok(o) => o,
+            Err(e) => return Err(e),
+        }
+    {
         error!("Out of range! Too high!");
         return Err(custom_error("Out of range!"));
     }
@@ -685,11 +761,11 @@ pub fn set_built(to: usize, verbose: bool) -> Result<(), io::Error> {
             }
 
             return Ok(());
-        },
+        }
         Err(e) => {
             error!("Failed to create/write 'built' tracking file!");
             return Err(e);
-        },
+        }
     };
 }
 
@@ -700,15 +776,19 @@ pub fn get_current() -> Result<usize, io::Error> {
         Err(e) => {
             error!("Failed to read 'current' file!");
             return Err(e);
-        },
+        }
     };
 
     let generation: usize = match contents.trim().parse() {
         Ok(o) => o,
         Err(_e) => {
-            error!("Failed to parse number from 'current' file! (Maybe 'current' file is corrupted?)");
-            return Err(custom_error("Failed to parse number out of 'current' file!"));
-        },
+            error!(
+                "Failed to parse number from 'current' file! (Maybe 'current' file is corrupted?)"
+            );
+            return Err(custom_error(
+                "Failed to parse number out of 'current' file!",
+            ));
+        }
     };
 
     return Ok(generation);
@@ -734,18 +814,20 @@ pub fn get_built_core(output: bool) -> Result<usize, io::Error> {
             }
 
             return Err(e);
-        },
+        }
     };
 
     let generation: usize = match contents.trim().parse() {
         Ok(o) => o,
         Err(_e) => {
             if output {
-                error!("Failed to parse number from 'built' file! (Maybe 'built' file is corrupted?)");
+                error!(
+                    "Failed to parse number from 'built' file! (Maybe 'built' file is corrupted?)"
+                );
             }
 
             return Err(custom_error("Failed to parse number out of 'built' file!"));
-        },
+        }
     };
 
     return Ok(generation);
@@ -809,7 +891,8 @@ pub fn delete(generation: usize, verbose: bool) -> Result<(), io::Error> {
     if match exists(generation) {
         Ok(o) => o,
         Err(e) => return Err(e),
-    } == false {
+    } == false
+    {
         error!("Generation {} does not exist!", generation);
         return Err(custom_error("Generation does not exist!"));
     }
@@ -819,11 +902,11 @@ pub fn delete(generation: usize, verbose: bool) -> Result<(), io::Error> {
             if verbose {
                 info!("Deleted generation: {}", generation);
             }
-        },
+        }
         Err(e) => {
             error!("Failed to delete generation: {}", generation);
             return Err(e);
-        },
+        }
     };
 
     return Ok(());
@@ -892,34 +975,34 @@ pub fn usize_from_gen_name(name: &str) -> Result<usize, io::Error> {
         Err(_e) => {
             error!("Failed to parse invalid generation name! ({})", name.trim());
             return Err(custom_error("Failed to parse invalid generation name!"));
-        },
+        }
     });
 }
 
 // Return true or false based on if the given generation is the 'current' generation.
 pub fn is_current(generation: usize) -> Result<bool, io::Error> {
-    if generation == match get_current() {
-        Ok(o) => o,
-        Err(e) => return Err(e),
-    } {
+    if generation
+        == match get_current() {
+            Ok(o) => o,
+            Err(e) => return Err(e),
+        }
+    {
         return Ok(true);
-    }
-
-    else {
+    } else {
         return Ok(false);
     }
 }
 
 // Return true or false based on if the given generation is the built generation.
 pub fn is_built(generation: usize) -> Result<bool, io::Error> {
-    if generation == match get_built() {
-        Ok(o) => o,
-        Err(e) => return Err(e),
-    } {
+    if generation
+        == match get_built() {
+            Ok(o) => o,
+            Err(e) => return Err(e),
+        }
+    {
         return Ok(true);
-    }
-
-    else {
+    } else {
         return Ok(false);
     }
 }
@@ -939,21 +1022,24 @@ fn list_core(calls: bool) -> Result<Vec<(String, String, bool, bool)>, io::Error
     let gen_listed = match directory::list_items(&places::gens()) {
         Ok(o) => o,
         Err(e) => {
-            error!("Failed to list the generations directory! ({})", places::gens().to_string());
+            error!(
+                "Failed to list the generations directory! ({})",
+                places::gens().to_string()
+            );
             return Err(e);
-        },
+        }
     };
 
     let mut generations: Vec<Path> = Vec::new();
 
     for i in gen_listed.into_iter() {
         match i.path_type() {
-            PathType::File => {},
+            PathType::File => {}
             PathType::Directory => generations.push(i),
             PathType::Invalid => {
                 error!("Found invalid path! (Listing generations.)");
                 return Err(custom_error("Found invalid path."));
-            },
+            }
         };
     }
 
@@ -961,7 +1047,8 @@ fn list_core(calls: bool) -> Result<Vec<(String, String, bool, bool)>, io::Error
 
     for i in generations.iter() {
         let generation_name = i.basename();
-        let commit_msg = file::read(&i.add_str("commit")).unwrap_or(String::from("<< COMMIT MESSAGE MISSING >>"));
+        let commit_msg = file::read(&i.add_str("commit"))
+            .unwrap_or(String::from("<< COMMIT MESSAGE MISSING >>"));
 
         let current_number: usize;
         let built_number: usize;
@@ -1016,18 +1103,38 @@ pub fn list_print() -> Result<(), io::Error> {
     let mut max_digits: usize = 0;
 
     if list_items_sorted.len() > 0 {
-        max_digits = list_items_sorted[list_items_sorted.len() - 1].0.to_string().trim().len();
+        max_digits = list_items_sorted[list_items_sorted.len() - 1]
+            .0
+            .to_string()
+            .trim()
+            .len();
     }
 
     for i in list_items_sorted.iter() {
         let mut misc_text = String::new();
 
         if i.2 {
-            misc_text.push_str(format!(" {}{}{}", "[".bright_black().bold(), "CURRENT".bright_green().bold(), "]".bright_black().bold()).as_str());
+            misc_text.push_str(
+                format!(
+                    " {}{}{}",
+                    "[".bright_black().bold(),
+                    "CURRENT".bright_green().bold(),
+                    "]".bright_black().bold()
+                )
+                .as_str(),
+            );
         }
 
         if i.3 {
-            misc_text.push_str(format!(" {}{}{}", "[".bright_black().bold(), "BUILT".bright_yellow().bold(), "]".bright_black().bold()).as_str());
+            misc_text.push_str(
+                format!(
+                    " {}{}{}",
+                    "[".bright_black().bold(),
+                    "BUILT".bright_yellow().bold(),
+                    "]".bright_black().bold()
+                )
+                .as_str(),
+            );
         }
 
         let mut tabbed = String::new();
@@ -1054,7 +1161,9 @@ fn get_list_vector_names(list_vec: &Vec<(String, String, bool, bool)>) -> Vec<St
 }
 
 // Sort list vector.
-fn sort_list_vector(list_vec: &Vec<(String, String, bool, bool)>) -> Result<Vec<(String, String, bool, bool)>, io::Error> {
+fn sort_list_vector(
+    list_vec: &Vec<(String, String, bool, bool)>,
+) -> Result<Vec<(String, String, bool, bool)>, io::Error> {
     if list_vec.len() == 0 {
         return Ok(list_vec.clone());
     }
@@ -1123,5 +1232,7 @@ pub fn current_gen() -> Result<Path, io::Error> {
         Err(e) => return Err(e),
     };
 
-    return Ok(places::gens().add_str(&current.to_string()).add_str("gen.toml"));
+    return Ok(places::gens()
+        .add_str(&current.to_string())
+        .add_str("gen.toml"));
 }
