@@ -206,6 +206,7 @@ pub trait ConfigInfoToMessage {
 pub enum ConfigError {
     InvalidManager(String, Vec<String>),
     MissingMachine,
+    FailedToDeserializeConfigGeneration,
 }
 
 impl ConfigInfoToMessage for ConfigError {
@@ -220,10 +221,9 @@ impl ConfigInfoToMessage for ConfigError {
                 }
 
                 message
-            }
-            Self::MissingMachine => {
-                format!("Missing configuration for machine! (Machine specific gen.toml...)")
-            }
+            },
+            Self::MissingMachine => format!("Missing configuration for machine! (Machine specific gen.toml...)"),
+            Self::FailedToDeserializeConfigGeneration => format!("Failed to deserialize config (user-side) generation!"),
         }
     }
 }
@@ -252,7 +252,12 @@ pub fn check_config(
     let mut errors: Vec<ConfigError> = Vec::new();
     let mut warnings: Vec<ConfigWarning> = Vec::new();
 
-    let managers = match crate::management::get_managers() {
+    match generation::gen(ConfigSide::User) {
+        Ok(_) => (),
+        Err(_) => errors.push(ConfigError::FailedToDeserializeConfigGeneration),
+    };
+
+    let managers = match crate::management::managers() {
         Ok(o) => o,
         Err(e) => {
             piglog::fatal!("Failed to get a list of managers due to IO error: {}", e);

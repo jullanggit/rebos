@@ -1,7 +1,7 @@
 [package]
 name = "rebos"
 authors = ["Jackson Novak <jacksonnovak@proton.me>"]
-version = "3.5.1"
+version = "3.5.2"
 edition = "2021"
 description = "NixOS-like repeatability for any Linux distro."
 license = "GPL-3.0-or-later"

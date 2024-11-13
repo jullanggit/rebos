@@ -401,7 +401,7 @@ dependencies = [
 
 [[package]]
 name = "rebos"
-version = "3.5.1"
+version = "3.5.2"
 dependencies = [
  "clap",
  "colored",
