@@ -221,9 +221,13 @@ impl ConfigInfoToMessage for ConfigError {
                 }
 
                 message
-            },
-            Self::MissingMachine => format!("Missing configuration for machine! (Machine specific gen.toml...)"),
-            Self::FailedToDeserializeConfigGeneration => format!("Failed to deserialize config (user-side) generation!"),
+            }
+            Self::MissingMachine => {
+                format!("Missing configuration for machine! (Machine specific gen.toml...)")
+            }
+            Self::FailedToDeserializeConfigGeneration => {
+                format!("Failed to deserialize config (user-side) generation!")
+            }
         }
     }
 }
@@ -257,7 +261,7 @@ pub fn check_config(
         Err(_) => errors.push(ConfigError::FailedToDeserializeConfigGeneration),
     };
 
-    let managers = match crate::management::managers() {
+    let managers = match crate::management::get_managers() {
         Ok(o) => o,
         Err(e) => {
             piglog::fatal!("Failed to get a list of managers due to IO error: {}", e);
