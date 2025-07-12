@@ -1,3 +1,6 @@
+> [!TIP]
+If you like this, check out [atem](https://github.com/jullanggit/atem)!
+
 ## File manager
 If you like rebos, you might also be interested in my (@jullanggit) file manager for it: https://github.com/jullanggit/rebos-file-manager
 
